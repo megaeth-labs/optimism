@@ -612,9 +612,12 @@ func (d *DeployConfig) RollupConfig(l1StartBlock *types.Block, l2GenesisBlockHas
 	var plasma *rollup.PlasmaConfig
 	if d.UsePlasma {
 		plasma = &rollup.PlasmaConfig{
-			DAChallengeAddress: d.DAChallengeProxy,
-			DAChallengeWindow:  d.DAChallengeWindow,
-			DAResolveWindow:    d.DAResolveWindow,
+			//DAChallengeAddress: d.DAChallengeProxy,
+			//	DAChallengeWindow:  d.DAChallengeWindow,
+			//	DAResolveWindow:    d.DAResolveWindow,
+			DAChallengeAddress: common.HexToAddress("0x0000000000000000000000000000000000000000"),
+			DAChallengeWindow:  300,
+			DAResolveWindow:    300,
 		}
 	}
 
