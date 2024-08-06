@@ -93,7 +93,8 @@ func (d *Sequencer) StartBuildingBlock(ctx context.Context) error {
 	// empty blocks (other than the L1 info deposit and any user deposits). We handle this by
 	// setting NoTxPool to true, which will cause the Sequencer to not include any transactions
 	// from the transaction pool.
-	attrs.NoTxPool = uint64(attrs.Timestamp) > l1Origin.Time+d.spec.MaxSequencerDrift(l1Origin.Time)
+	//attrs.NoTxPool = uint64(attrs.Timestamp) > l1Origin.Time+d.spec.MaxSequencerDrift(l1Origin.Time)
+	attrs.NoTxPool = false
 
 	// For the Ecotone activation block we shouldn't include any sequencer transactions.
 	if d.rollupCfg.IsEcotoneActivationBlock(uint64(attrs.Timestamp)) {
@@ -158,9 +159,14 @@ func (d *Sequencer) PlanNextSequencerAction() time.Duration {
 		return delay
 	}
 
-	blockTime := time.Duration(d.rollupCfg.BlockTime) * time.Second
-	payloadTime := time.Unix(int64(head.Time+d.rollupCfg.BlockTime), 0)
+	//blockTime := time.Duration(d.rollupCfg.BlockTime) * time.Second
+	//payloadTime := time.Unix(int64(head.Time+d.rollupCfg.BlockTime), 0)
+	blockTime := time.Duration(500) * time.Millisecond
+	payloadTime := time.Unix(int64(head.Time), 500000000)
 	remainingTime := payloadTime.Sub(now)
+	if remainingTime > 900*time.Millisecond {
+		remainingTime -= blockTime
+	}
 
 	// If we started building a block already, and if that work is still consistent,
 	// then we would like to finish it by sealing the block.
@@ -255,14 +261,17 @@ func (d *Sequencer) RunNextSequencerAction(ctx context.Context, agossip async.As
 			} else if errors.Is(err, derive.ErrReset) {
 				d.log.Error("sequencer failed to seal new block, requiring derivation reset", "err", err)
 				d.metrics.RecordSequencerReset()
-				d.nextAction = d.timeNow().Add(time.Second * time.Duration(d.rollupCfg.BlockTime)) // hold off from sequencing for a full block
+				//d.nextAction = d.timeNow().Add(time.Second * time.Duration(d.rollupCfg.BlockTime)) // hold off from sequencing for a full block
+				d.nextAction = d.timeNow().Add(time.Millisecond * 400) // hold off from sequencing for a full block
 				return nil, err
 			} else if errors.Is(err, derive.ErrTemporary) {
 				d.log.Error("sequencer temporarily failed to start building new block", "err", err)
-				d.nextAction = d.timeNow().Add(time.Second)
+				//d.nextAction = d.timeNow().Add(time.Second)
+				d.nextAction = d.timeNow().Add(time.Millisecond * 200)
 			} else {
 				d.log.Error("sequencer failed to start building new block with unclassified error", "err", err)
-				d.nextAction = d.timeNow().Add(time.Second)
+				//d.nextAction = d.timeNow().Add(time.Second)
+				d.nextAction = d.timeNow().Add(time.Millisecond * 200)
 			}
 		} else {
 			parent, buildingID, _ := d.engine.BuildingPayload() // we should have a new payload ID now that we're building a block

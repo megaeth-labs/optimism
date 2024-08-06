@@ -633,10 +633,11 @@ func (eq *EngineQueue) forceNextSafeAttributes(ctx context.Context) error {
 			// Deposit transaction execution errors are suppressed in the execution engine, but if the
 			// block is somehow invalid, there is nothing we can do to recover & we should exit.
 			// TODO: Can this be triggered by an empty batch with invalid data (like parent hash or gas limit?)
-			if len(attrs.Transactions) == depositCount {
-				eq.log.Error("deposit only block was invalid", "parent", eq.safeAttributes.parent, "err", err)
-				return NewCriticalError(fmt.Errorf("failed to process block with only deposit transactions: %w", err))
-			}
+			//if len(attrs.Transactions) == depositCount {
+			//		fmt.Println("a: ", len(attrs.Transactions), ", b:", depositCount)
+			//		eq.log.Error("deposit only block was invalid", "parent", eq.safeAttributes.parent, "err", err)
+			//		return NewCriticalError(fmt.Errorf("failed to process block with only deposit transactions: %w", err))
+			//	}
 			// drop the payload without inserting it
 			eq.safeAttributes = nil
 			// Revert the pending safe head to the safe head.

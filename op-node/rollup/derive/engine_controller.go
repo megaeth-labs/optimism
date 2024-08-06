@@ -2,6 +2,7 @@ package derive
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"time"
@@ -177,6 +178,11 @@ func (e *EngineController) StartPayload(ctx context.Context, parent eth.L2BlockR
 		FinalizedBlockHash: e.finalizedHead.Hash,
 	}
 
+	{
+		tmp := make([]byte, 32)
+		rand.Read(tmp)
+		attrs.attributes.PrevRandao = [32]byte(tmp)
+	}
 	id, errTyp, err := startPayload(ctx, e.engine, fc, attrs.attributes)
 	if err != nil {
 		return errTyp, err

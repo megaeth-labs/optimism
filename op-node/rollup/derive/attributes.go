@@ -43,6 +43,8 @@ func NewFetchingAttributesBuilder(rollupCfg *rollup.Config, l1 L1ReceiptsFetcher
 // by setting NoTxPool=false as sequencer, or by appending batch transactions as verifier.
 // The severity of the error is returned; a crit=false error means there was a temporary issue, like a failed RPC or time-out.
 // A crit=true error means the input arguments are inconsistent or invalid.
+var s = 0
+
 func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Context, l2Parent eth.L2BlockRef, epoch eth.BlockID) (attrs *eth.PayloadAttributes, err error) {
 	var l1Info eth.BlockInfo
 	var depositTxs []hexutil.Bytes
@@ -94,7 +96,15 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 	}
 
 	// Sanity check the L1 origin was correctly selected to maintain the time invariant between L1 and L2
-	nextL2Time := l2Parent.Time + ba.rollupCfg.BlockTime
+	nextL2Time := uint64(0)
+	if s%2 == 0 {
+		nextL2Time = l2Parent.Time
+		s += 1
+	} else {
+		nextL2Time = l2Parent.Time + 1
+		s -= 1
+	}
+	//nextL2Time := l2Parent.Time + ba.rollupCfg.BlockTime
 	if nextL2Time < l1Info.Time() {
 		return nil, NewResetError(fmt.Errorf("cannot build L2 block on top %s for time %d before L1 origin %s at time %d",
 			l2Parent, nextL2Time, eth.ToBlockID(l1Info), l1Info.Time()))
