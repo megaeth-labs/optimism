@@ -37,6 +37,7 @@ type L2BlockRef struct {
 	Time           uint64      `json:"timestamp"`
 	L1Origin       BlockID     `json:"l1origin"`
 	SequenceNumber uint64      `json:"sequenceNumber"` // distance to first block of epoch
+	PrevRandao     Bytes32     `json:"mixHash"`
 }
 
 func (id L2BlockRef) String() string {

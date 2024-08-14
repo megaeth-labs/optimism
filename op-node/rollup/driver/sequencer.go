@@ -2,6 +2,7 @@ package driver
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"time"
@@ -147,7 +148,8 @@ func (d *Sequencer) PlanNextSequencerAction() time.Duration {
 	if safe {
 		d.log.Warn("delaying sequencing to not interrupt safe-head changes", "onto", buildingOnto, "onto_time", buildingOnto.Time)
 		// approximates the worst-case time it takes to build a block, to reattempt sequencing after.
-		return time.Second * time.Duration(d.rollupCfg.BlockTime)
+		//return time.Second * time.Duration(d.rollupCfg.BlockTime)
+		return time.Millisecond * time.Duration(d.rollupCfg.BlockTime)
 	}
 
 	head := d.engine.UnsafeL2Head()
@@ -161,12 +163,14 @@ func (d *Sequencer) PlanNextSequencerAction() time.Duration {
 
 	//blockTime := time.Duration(d.rollupCfg.BlockTime) * time.Second
 	//payloadTime := time.Unix(int64(head.Time+d.rollupCfg.BlockTime), 0)
-	blockTime := time.Duration(500) * time.Millisecond
-	payloadTime := time.Unix(int64(head.Time), 500000000)
+	blockTime := time.Duration(d.rollupCfg.BlockTime) * time.Millisecond
+	var num = binary.BigEndian.Uint64(head.PrevRandao[:8])
+	payloadTime := time.Unix(0, int64(num*1e6))
+	//payloadTime := time.Unix(int64(head.Time), int64(d.rollupCfg.BlockTime)*time.Millisecond.Nanoseconds())
 	remainingTime := payloadTime.Sub(now)
-	if remainingTime > 900*time.Millisecond {
-		remainingTime -= blockTime
-	}
+	//if remainingTime > blockTime {
+	//	remainingTime -= blockTime
+	//}
 
 	// If we started building a block already, and if that work is still consistent,
 	// then we would like to finish it by sealing the block.
@@ -224,7 +228,8 @@ func (d *Sequencer) RunNextSequencerAction(ctx context.Context, agossip async.As
 		if safe {
 			d.log.Warn("avoiding sequencing to not interrupt safe-head changes", "onto", onto, "onto_time", onto.Time)
 			// approximates the worst-case time it takes to build a block, to reattempt sequencing after.
-			d.nextAction = d.timeNow().Add(time.Second * time.Duration(d.rollupCfg.BlockTime))
+			//d.nextAction = d.timeNow().Add(time.Second * time.Duration(d.rollupCfg.BlockTime))
+			d.nextAction = d.timeNow().Add(time.Millisecond * time.Duration(d.rollupCfg.BlockTime))
 			return nil, nil
 		}
 		envelope, err := d.CompleteBuildingBlock(ctx, agossip, sequencerConductor)
@@ -234,17 +239,18 @@ func (d *Sequencer) RunNextSequencerAction(ctx context.Context, agossip async.As
 			} else if errors.Is(err, derive.ErrReset) {
 				d.log.Error("sequencer failed to seal new block, requiring derivation reset", "err", err)
 				d.metrics.RecordSequencerReset()
-				d.nextAction = d.timeNow().Add(time.Second * time.Duration(d.rollupCfg.BlockTime)) // hold off from sequencing for a full block
+				//d.nextAction = d.timeNow().Add(time.Second * time.Duration(d.rollupCfg.BlockTime)) // hold off from sequencing for a full block
+				d.nextAction = d.timeNow().Add(time.Millisecond * time.Duration(d.rollupCfg.BlockTime)) // hold off from sequencing for a full block
 				d.CancelBuildingBlock(ctx)
 				return nil, err
 			} else if errors.Is(err, derive.ErrTemporary) {
 				d.log.Error("sequencer failed temporarily to seal new block", "err", err)
-				d.nextAction = d.timeNow().Add(time.Second)
+				d.nextAction = d.timeNow().Add(time.Millisecond * 100)
 				// We don't explicitly cancel block building jobs upon temporary errors: we may still finish the block.
 				// Any unfinished block building work eventually times out, and will be cleaned up that way.
 			} else {
 				d.log.Error("sequencer failed to seal block with unclassified error", "err", err)
-				d.nextAction = d.timeNow().Add(time.Second)
+				d.nextAction = d.timeNow().Add(time.Millisecond * 100)
 				d.CancelBuildingBlock(ctx)
 			}
 			return nil, nil
@@ -262,16 +268,16 @@ func (d *Sequencer) RunNextSequencerAction(ctx context.Context, agossip async.As
 				d.log.Error("sequencer failed to seal new block, requiring derivation reset", "err", err)
 				d.metrics.RecordSequencerReset()
 				//d.nextAction = d.timeNow().Add(time.Second * time.Duration(d.rollupCfg.BlockTime)) // hold off from sequencing for a full block
-				d.nextAction = d.timeNow().Add(time.Millisecond * 400) // hold off from sequencing for a full block
+				d.nextAction = d.timeNow().Add(time.Millisecond * time.Duration(d.rollupCfg.BlockTime)) // hold off from sequencing for a full block
 				return nil, err
 			} else if errors.Is(err, derive.ErrTemporary) {
 				d.log.Error("sequencer temporarily failed to start building new block", "err", err)
 				//d.nextAction = d.timeNow().Add(time.Second)
-				d.nextAction = d.timeNow().Add(time.Millisecond * 200)
+				d.nextAction = d.timeNow().Add(time.Millisecond * 100)
 			} else {
 				d.log.Error("sequencer failed to start building new block with unclassified error", "err", err)
 				//d.nextAction = d.timeNow().Add(time.Second)
-				d.nextAction = d.timeNow().Add(time.Millisecond * 200)
+				d.nextAction = d.timeNow().Add(time.Millisecond * 100)
 			}
 		} else {
 			parent, buildingID, _ := d.engine.BuildingPayload() // we should have a new payload ID now that we're building a block

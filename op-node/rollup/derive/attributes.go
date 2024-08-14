@@ -2,8 +2,9 @@ package derive
 
 import (
 	"context"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -96,19 +97,25 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 	}
 
 	// Sanity check the L1 origin was correctly selected to maintain the time invariant between L1 and L2
-	nextL2Time := uint64(0)
-	if s%2 == 0 {
-		nextL2Time = l2Parent.Time
-		s += 1
+	var byteArray [32]byte
+	var tmp uint64
+	if l2Parent.PrevRandao.String() == "0x0000000000000000000000000000000000000000000000000000000000000000" {
+		tmp = l2Parent.Time * 1000
 	} else {
-		nextL2Time = l2Parent.Time + 1
-		s -= 1
+		tmp = binary.BigEndian.Uint64(l2Parent.PrevRandao[:8])
 	}
+	tmp += ba.rollupCfg.BlockTime
+	{
+		hexStr := fmt.Sprintf("%016x", tmp)
+		hexBytes, _ := hex.DecodeString(hexStr)
+		copy(byteArray[:8], hexBytes)
+	}
+	nextL2Time := tmp / 1000
 	//nextL2Time := l2Parent.Time + ba.rollupCfg.BlockTime
-	if nextL2Time < l1Info.Time() {
-		return nil, NewResetError(fmt.Errorf("cannot build L2 block on top %s for time %d before L1 origin %s at time %d",
-			l2Parent, nextL2Time, eth.ToBlockID(l1Info), l1Info.Time()))
-	}
+	//if nextL2Time < l1Info.Time() {
+	//	return nil, NewResetError(fmt.Errorf("cannot build L2 block on top %s for time %d before L1 origin %s at time %d",
+	//		l2Parent, nextL2Time, eth.ToBlockID(l1Info), l1Info.Time()))
+	//}
 
 	var upgradeTxs []hexutil.Bytes
 	if ba.rollupCfg.IsEcotoneActivationBlock(nextL2Time) {
@@ -151,7 +158,7 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 
 	return &eth.PayloadAttributes{
 		Timestamp:             hexutil.Uint64(nextL2Time),
-		PrevRandao:            eth.Bytes32(l1Info.MixDigest()),
+		PrevRandao:            byteArray,
 		SuggestedFeeRecipient: predeploys.SequencerFeeVaultAddr,
 		Transactions:          txs,
 		NoTxPool:              true,

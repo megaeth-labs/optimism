@@ -48,6 +48,7 @@ func PayloadToBlockRef(rollupCfg *rollup.Config, payload *eth.ExecutionPayload) 
 		Time:           uint64(payload.Timestamp),
 		L1Origin:       l1Origin,
 		SequenceNumber: sequenceNumber,
+		PrevRandao:     payload.PrevRandao,
 	}, nil
 }
 
