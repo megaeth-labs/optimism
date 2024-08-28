@@ -657,9 +657,9 @@ func (d *DeployConfig) RollupConfig(l1StartBlock *types.Block, l2GenesisBlockHas
 		CanyonTime:             d.CanyonTime(l1StartBlock.Time()),
 		DeltaTime:              d.DeltaTime(l1StartBlock.Time()),
 		EcotoneTime:            d.EcotoneTime(l1StartBlock.Time()),
-		FjordTime:              d.FjordTime(l1StartBlock.Time()),
-		InteropTime:            d.InteropTime(l1StartBlock.Time()),
-		PlasmaConfig:           plasma,
+		FjordTime:    d.FjordTime(l1StartBlock.Time()),
+		InteropTime:  d.InteropTime(l1StartBlock.Time()),
+		PlasmaConfig: plasma,
 	}, nil
 }
 

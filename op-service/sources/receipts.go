@@ -85,6 +85,7 @@ func validateReceipts(block eth.BlockID, receiptHash common.Hash, txHashes []com
 	hasher := trie.NewStackTrie(nil)
 	computed := types.DeriveSha(types.Receipts(receipts), hasher)
 	if receiptHash != computed {
+		//return nil
 		return fmt.Errorf("failed to fetch list of receipts: expected receipt root %s but computed %s from retrieved receipts", receiptHash, computed)
 	}
 	return nil

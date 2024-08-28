@@ -28,10 +28,13 @@ block=$(cast block finalized --rpc-url "$L1_RPC_URL")
 timestamp=$(echo "$block" | awk '/timestamp/ { print $2 }')
 blockhash=$(echo "$block" | awk '/hash/ { print $2 }')
 
+hexTimestamp=$(printf "0x%x" $timestamp)
+
 # Generate the config file
 config=$(cat << EOL
 {
   "l1StartingBlockTag": "$blockhash",
+  "l1GenesisBlockTimestamp": "$hexTimestamp",
 
   "l1ChainID": $L1_CHAIN_ID,
   "l2ChainID": $L2_CHAIN_ID,
@@ -43,7 +46,7 @@ config=$(cat << EOL
   "channelTimeout": 300,
 
   "p2pSequencerAddress": "$GS_SEQUENCER_ADDRESS",
-  "batchInboxAddress": "0xff00000000000000000000000000000000042069",
+  "batchInboxAddress": "0xff00000000000000000000000000000000086792",
   "batchSenderAddress": "$GS_BATCHER_ADDRESS",
 
   "l2OutputOracleSubmissionInterval": 120,
@@ -73,8 +76,8 @@ config=$(cat << EOL
   "gasPriceOracleScalar": 1000000,
 
   "enableGovernance": true,
-  "governanceTokenSymbol": "OP",
-  "governanceTokenName": "Optimism",
+  "governanceTokenSymbol": "ME",
+  "governanceTokenName": "MegaEth",
   "governanceTokenOwner": "$GS_ADMIN_ADDRESS",
 
   "l2GenesisBlockGasLimit": "0x1c9c380",
@@ -85,8 +88,8 @@ config=$(cat << EOL
   "eip1559DenominatorCanyon": 250,
   "eip1559Elasticity": 6,
 
-  "l2GenesisEcotoneTimeOffset": "0x0",
-  "l2GenesisDeltaTimeOffset": "0x0",
+  "l2GenesisEcotoneTimeOffset": null,
+  "l2GenesisDeltaTimeOffset": null,
   "l2GenesisCanyonTimeOffset": "0x0",
 
   "systemConfigStartBlock": 0,
@@ -104,7 +107,17 @@ config=$(cat << EOL
   "faultGameWithdrawalDelay": 604800,
 
   "preimageOracleMinProposalSize": 1800000,
-  "preimageOracleChallengePeriod": 86400
+  "preimageOracleChallengePeriod": 86400,
+   "proofMaturityDelaySeconds": 12,
+    "disputeGameFinalityDelaySeconds": 6,
+    "respectedGameType": 0,
+    "useFaultProofs": false,
+    "usePlasma": true,
+    "daChallengeWindow": 6,
+    "daResolveWindow": 6,
+    "daBondSize": 1000000,
+    "daResolverRefundPercentage": 0,
+    "daCommitmentType": "GenericCommitment"
 }
 EOL
 )
