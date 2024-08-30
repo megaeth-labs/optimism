@@ -373,20 +373,22 @@ func (l *BatchSubmitter) waitNodeSync() error {
 // publishStateToL1 queues up all pending TxData to be published to the L1, returning when there is
 // no more data to queue for publishing or if there was an error queing the data.
 func (l *BatchSubmitter) publishStateToL1(queue *txmgr.Queue[txID], receiptsCh chan txmgr.TxReceipt[txID]) {
+	var wg sync.WaitGroup
 	for {
 		// if the txmgr is closed, we stop the transaction sending
 		if l.Txmgr.IsClosed() {
 			l.Log.Info("Txmgr is closed, aborting state publishing")
-			return
+			break
 		}
-		err := l.publishTxToL1(l.killCtx, queue, receiptsCh)
+		err := l.publishTxToL1(l.killCtx, queue, receiptsCh, &wg)
 		if err != nil {
 			if err != io.EOF {
 				l.Log.Error("error publishing tx to l1", "err", err)
 			}
-			return
+			break
 		}
 	}
+	wg.Wait()
 }
 
 // clearState clears the state of the channel manager
@@ -429,7 +431,7 @@ func (l *BatchSubmitter) clearState(ctx context.Context) {
 }
 
 // publishTxToL1 submits a single state tx to the L1
-func (l *BatchSubmitter) publishTxToL1(ctx context.Context, queue *txmgr.Queue[txID], receiptsCh chan txmgr.TxReceipt[txID]) error {
+func (l *BatchSubmitter) publishTxToL1(ctx context.Context, queue *txmgr.Queue[txID], receiptsCh chan txmgr.TxReceipt[txID], wg *sync.WaitGroup) error {
 	// send all available transactions
 	l1tip, err := l.l1Tip(ctx)
 	if err != nil {
@@ -449,7 +451,7 @@ func (l *BatchSubmitter) publishTxToL1(ctx context.Context, queue *txmgr.Queue[t
 		return err
 	}
 
-	if err = l.sendTransaction(ctx, txdata, queue, receiptsCh); err != nil {
+	if err = l.sendTransaction(ctx, txdata, queue, receiptsCh, wg); err != nil {
 		return fmt.Errorf("BatchSubmitter.sendTransaction failed: %w", err)
 	}
 	return nil
@@ -481,12 +483,39 @@ func (l *BatchSubmitter) safeL1Origin(ctx context.Context) (eth.BlockID, error) 
 
 // sendTransaction creates & queues for sending a transaction to the batch inbox address with the given `txData`.
 // The method will block if the queue's MaxPendingTransactions is exceeded.
-func (l *BatchSubmitter) sendTransaction(ctx context.Context, txdata txData, queue *txmgr.Queue[txID], receiptsCh chan txmgr.TxReceipt[txID]) error {
+func (l *BatchSubmitter) sendTransaction(ctx context.Context, txdata txData, queue *txmgr.Queue[txID], receiptsCh chan txmgr.TxReceipt[txID], wg *sync.WaitGroup) error {
 	var err error
 	// Do the gas estimation offline. A value of 0 will cause the [txmgr] to estimate the gas limit.
 
 	var candidate *txmgr.TxCandidate
-	if l.Config.UseBlobs {
+	if !l.Config.UseBlobs && l.Config.UsePlasma {
+		// sanity check
+		if nf := len(txdata.frames); nf != 1 {
+			l.Log.Crit("unexpected number of frames in calldata tx", "num_frames", nf)
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			comm, err := l.PlasmaDA.SetInput(ctx, txdata.CallData())
+			if err != nil {
+				l.Log.Error("Failed to post input to Plasma DA", "error", err)
+				// requeue frame if we fail to post to the DA Provider so it can be retried
+				l.recordFailedTx(txdata.ID(), err)
+				return
+			}
+			// signal plasma commitment tx with TxDataVersion1
+			candidate = l.calldataTxCandidate(comm.TxData())
+			intrinsicGas, err := core.IntrinsicGas(candidate.TxData, nil, false, true, true, false)
+			if err != nil {
+				// we log instead of return an error here because txmgr can do its own gas estimation
+				l.Log.Error("Failed to calculate intrinsic gas", "err", err)
+			} else {
+				candidate.GasLimit = intrinsicGas
+			}
+			queue.Send(txdata.ID(), *candidate, receiptsCh)
+		}()
+		return nil
+	} else if l.Config.UseBlobs {
 		if candidate, err = l.blobTxCandidate(txdata); err != nil {
 			// We could potentially fall through and try a calldata tx instead, but this would
 			// likely result in the chain spending more in gas fees than it is tuned for, so best
@@ -500,18 +529,6 @@ func (l *BatchSubmitter) sendTransaction(ctx context.Context, txdata txData, que
 			l.Log.Crit("unexpected number of frames in calldata tx", "num_frames", nf)
 		}
 		data := txdata.CallData()
-		// if plasma DA is enabled we post the txdata to the DA Provider and replace it with the commitment.
-		if l.Config.UsePlasma {
-			comm, err := l.PlasmaDA.SetInput(ctx, data)
-			if err != nil {
-				l.Log.Error("Failed to post input to Plasma DA", "error", err)
-				// requeue frame if we fail to post to the DA Provider so it can be retried
-				l.recordFailedTx(txdata.ID(), err)
-				return nil
-			}
-			// signal plasma commitment tx with TxDataVersion1
-			data = comm.TxData()
-		}
 		candidate = l.calldataTxCandidate(data)
 	}
 
