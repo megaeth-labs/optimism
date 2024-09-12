@@ -161,6 +161,7 @@ func (d *EngDeriver) AttachEmitter(em event.Emitter) {
 }
 
 func (d *EngDeriver) OnEvent(ev event.Event) bool {
+	d.log.Info("EngDeriver started", "eventType", ev.String())
 	switch x := ev.(type) {
 	case TryBackupUnsafeReorgEvent:
 		// If we don't need to call FCU to restore unsafeHead using backupUnsafe, keep going b/c
@@ -288,6 +289,7 @@ func (d *EngDeriver) OnEvent(ev event.Event) bool {
 	default:
 		return false
 	}
+	d.log.Info("EngDeriver ended", "eventType", ev.String())
 	return true
 }
 

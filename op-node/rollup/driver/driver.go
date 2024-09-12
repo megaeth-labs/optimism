@@ -51,6 +51,8 @@ type Metrics interface {
 
 	RecordL1ReorgDepth(d uint64)
 
+	RecordL2BlockDetail(blockRate, averageTPS, blockInterval, realtimeTPS, blockTxs float64)
+
 	engine.Metrics
 	L1FetcherMetrics
 	event.Metrics
@@ -172,16 +174,21 @@ func NewDriver(
 	var drain func() error
 	// This instantiation will be one of more options: soon there will be a parallel events executor
 	{
-		s := event.NewGlobalSynchronous(driverCtx)
-		executor = s
-		drain = s.Drain
+		executor = event.NewParallelExec()
+		drain = func() error { return nil } // no-op
+		//s := event.NewGlobalSynchronous(driverCtx)
+		//executor = s
+		//drain = s.Drain
 	}
 	sys := event.NewSystem(log, executor)
 	sys.AddTracer(event.NewMetricsTracer(metrics))
+	//logger := golog.New()
+	//logTracer := event.NewLogTracer(logger, golog.LevelDebug)
+	//sys.AddTracer(logTracer)
 
 	opts := event.DefaultRegisterOpts()
 
-	statusTracker := status.NewStatusTracker(log, metrics)
+	statusTracker := status.NewStatusTracker(log, metrics, l2)
 	sys.Register("status", statusTracker, opts)
 
 	l1Tracker := status.NewL1Tracker(l1)

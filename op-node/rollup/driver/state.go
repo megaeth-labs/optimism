@@ -150,6 +150,12 @@ func (s *Driver) eventLoop() {
 	defer s.wg.Done()
 	s.log.Info("State loop started")
 	defer s.log.Info("State loop returned")
+	//f, _ := os.Create("/home/clay/trace.out")
+	//defer f.Close()
+	//if err := trace.Start(f); err != nil {
+	//	panic(err)
+	//}
+	//defer trace.Stop()
 
 	defer s.driverCancel()
 
@@ -172,6 +178,7 @@ func (s *Driver) eventLoop() {
 	planSequencerAction := func() {
 		nextAction, ok := s.sequencer.NextAction()
 		if !ok {
+			s.log.Info("next not ok", "ok", ok, "sequencerCh", sequencerCh)
 			if sequencerCh != nil {
 				s.log.Info("Sequencer paused until new events")
 			}
@@ -180,6 +187,7 @@ func (s *Driver) eventLoop() {
 		}
 		// avoid unnecessary timer resets
 		if nextAction == prevTime {
+			s.log.Info("avoid", "nextAction", nextAction.String())
 			return
 		}
 		prevTime = nextAction
@@ -199,12 +207,17 @@ func (s *Driver) eventLoop() {
 	defer altSyncTicker.Stop()
 	lastUnsafeL2 := s.Engine.UnsafeL2Head()
 
+	var currentNextDelayedStep <-chan time.Time = nil
+
+	i := 0
 	for {
+		s.log.Info("loop started", "index", i)
 		if s.driverCtx.Err() != nil { // don't try to schedule/handle more work when we are closing.
 			return
 		}
 
 		if s.drain != nil {
+			s.log.Info("drain")
 			// While event-processing is synchronous we have to drain
 			// (i.e. process all queued-up events) before creating any new events.
 			if err := s.drain(); err != nil {
@@ -215,19 +228,28 @@ func (s *Driver) eventLoop() {
 			}
 		}
 
+		s.log.Info("planSequencerAction started")
 		planSequencerAction()
+		s.log.Info("planSequencerAction ended")
 
 		// If the engine is not ready, or if the L2 head is actively changing, then reset the alt-sync:
 		// there is no need to request L2 blocks when we are syncing already.
 		if head := s.Engine.UnsafeL2Head(); head != lastUnsafeL2 || !s.Derivation.DerivationReady() {
 			lastUnsafeL2 = head
 			altSyncTicker.Reset(syncCheckInterval)
+			s.log.Info("altSyncTicker reset", "syncCheckInterval", syncCheckInterval.String())
 		}
 
+		s.log.Info("select started", "index", i, "sequencerCh", sequencerCh)
 		select {
 		case <-sequencerCh:
+			s.log.Info("SequencerActionEvent started")
 			s.Emitter.Emit(sequencing.SequencerActionEvent{})
+			s.log.Info("SequencerActionEvent ended")
+		case <-s.sequencer.NextActionStep():
+			s.log.Info("debug000000000000000000, normal consume")
 		case <-altSyncTicker.C:
+			s.log.Info("altSyncTicker")
 			// Check if there is a gap in the current unsafe payload queue.
 			ctx, cancel := context.WithTimeout(s.driverCtx, time.Second*2)
 			err := s.checkForGapInUnsafeQueue(ctx)
@@ -235,7 +257,9 @@ func (s *Driver) eventLoop() {
 			if err != nil {
 				s.log.Warn("failed to check for unsafe L2 blocks to sync", "err", err)
 			}
+			s.log.Info("altSyncTicker ended")
 		case envelope := <-s.unsafeL2Payloads:
+			s.log.Info("unsafeL2Payloads started")
 			// If we are doing CL sync or done with engine syncing, fallback to the unsafe payload queue & CL P2P sync.
 			if s.SyncCfg.SyncMode == sync.CLSync || !s.Engine.IsEngineSyncing() {
 				s.log.Info("Optimistically queueing unsafe L2 execution payload", "id", envelope.ExecutionPayload.ID())
@@ -256,29 +280,48 @@ func (s *Driver) eventLoop() {
 					s.log.Warn("Failed to insert unsafe payload for EL sync", "id", envelope.ExecutionPayload.ID(), "err", err)
 				}
 			}
+			s.log.Info("unsafeL2Payloads ended")
 		case newL1Head := <-s.l1HeadSig:
+			s.log.Info("debug10")
 			s.Emitter.Emit(status.L1UnsafeEvent{L1Unsafe: newL1Head})
 			reqStep() // a new L1 head may mean we have the data to not get an EOF again.
+			s.log.Info("debug19")
 		case newL1Safe := <-s.l1SafeSig:
+			s.log.Info("debug20")
 			s.Emitter.Emit(status.L1SafeEvent{L1Safe: newL1Safe})
+			s.log.Info("debug29")
 			// no step, justified L1 information does not do anything for L2 derivation or status
 		case newL1Finalized := <-s.l1FinalizedSig:
+			s.log.Info("debug30")
 			s.emitter.Emit(finality.FinalizeL1Event{FinalizedL1: newL1Finalized})
 			reqStep() // we may be able to mark more L2 data as finalized now
-		case <-s.sched.NextDelayedStep():
+			s.log.Info("debug39")
+		case req := <-s.sched.UpdateDelayedStepReq:
+			currentNextDelayedStep = req
+		case <-currentNextDelayedStep:
+			//case <-s.sched.NextDelayedStep():
+			s.log.Info("debug40")
 			s.emitter.Emit(StepAttemptEvent{})
+			s.log.Info("debug49")
 		case <-s.sched.NextStep():
+			s.log.Info("debug50")
 			s.emitter.Emit(StepAttemptEvent{})
+			s.log.Info("debug59")
 		case respCh := <-s.stateReq:
+			s.log.Info("debug60")
 			respCh <- struct{}{}
+			s.log.Info("debug69")
 		case respCh := <-s.forceReset:
 			s.log.Warn("Derivation pipeline is manually reset")
 			s.Derivation.Reset()
 			s.metrics.RecordPipelineReset()
 			close(respCh)
 		case <-s.driverCtx.Done():
+			s.log.Info("debug70")
 			return
 		}
+		s.log.Info("loop ended", "index", i)
+		i += 1
 	}
 }
 

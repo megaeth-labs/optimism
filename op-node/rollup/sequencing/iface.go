@@ -13,6 +13,7 @@ type SequencerIface interface {
 	event.Deriver
 	// NextAction returns when the sequencer needs to do the next change, and iff it should do so.
 	NextAction() (t time.Time, ok bool)
+	NextActionStep() <-chan struct{}
 	Active() bool
 	Init(ctx context.Context, active bool) error
 	Start(ctx context.Context, head common.Hash) error

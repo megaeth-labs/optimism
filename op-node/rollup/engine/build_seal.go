@@ -52,11 +52,14 @@ func (ev BuildSealEvent) String() string {
 }
 
 func (eq *EngDeriver) onBuildSeal(ev BuildSealEvent) {
+	eq.log.Info("onBuildSeal started", "payloadId", ev.Info.ID.String())
 	ctx, cancel := context.WithTimeout(eq.ctx, buildSealTimeout)
 	defer cancel()
 
 	sealingStart := time.Now()
+	eq.log.Info("GetPayload started")
 	envelope, err := eq.ec.engine.GetPayload(ctx, ev.Info)
+	eq.log.Info("GetPayload ended")
 	if err != nil {
 		if x, ok := err.(eth.InputError); ok && x.Code == eth.UnknownPayload { //nolint:all
 			eq.log.Warn("Cannot seal block, payload ID is unknown",
@@ -77,6 +80,7 @@ func (eq *EngDeriver) onBuildSeal(ev BuildSealEvent) {
 		return
 	}
 
+	eq.log.Info("sanityCheckPayload started")
 	if err := sanityCheckPayload(envelope.ExecutionPayload); err != nil {
 		eq.emitter.Emit(PayloadSealInvalidEvent{
 			Info: ev.Info,
@@ -87,8 +91,11 @@ func (eq *EngDeriver) onBuildSeal(ev BuildSealEvent) {
 		})
 		return
 	}
+	eq.log.Info("sanityCheckPayload ended")
 
+	eq.log.Info("PayloadToBlockRef started")
 	ref, err := derive.PayloadToBlockRef(eq.cfg, envelope.ExecutionPayload)
+	eq.log.Info("PayloadToBlockRef ended")
 	if err != nil {
 		eq.emitter.Emit(PayloadSealInvalidEvent{
 			Info:         ev.Info,
@@ -108,9 +115,11 @@ func (eq *EngDeriver) onBuildSeal(ev BuildSealEvent) {
 	txnCount := len(envelope.ExecutionPayload.Transactions)
 	eq.metrics.CountSequencedTxs(txnCount)
 
-	eq.log.Debug("Processed new L2 block", "l2_unsafe", ref, "l1_origin", ref.L1Origin,
+	eq.log.Info("Processed new L2 block", "l2_unsafe", ref, "l1_origin", ref.L1Origin,
 		"txs", txnCount, "time", ref.Time, "seal_time", sealTime, "build_time", buildTime)
 
+	eq.log.Info("onBuildSeal ended")
+	eq.log.Info("emit BuildSealedEvent")
 	eq.emitter.Emit(BuildSealedEvent{
 		IsLastInSpan: ev.IsLastInSpan,
 		DerivedFrom:  ev.DerivedFrom,

@@ -61,7 +61,7 @@ func (r *systemActor) Emit(ev Event) {
 	if r.ctx.Err() != nil {
 		return
 	}
-	r.sys.emit(r.name, r.currentEvent, ev)
+	r.sys.emit(r.name, atomic.LoadUint64(&r.currentEvent), ev)
 }
 
 // RunEvent is called by the events executor.
@@ -74,13 +74,13 @@ func (r *systemActor) RunEvent(ev AnnotatedEvent) {
 		return
 	}
 
-	prev := r.currentEvent
+	prev := atomic.LoadUint64(&r.currentEvent)
 	start := time.Now()
-	r.currentEvent = r.sys.recordDerivStart(r.name, ev, start)
+	atomic.StoreUint64(&r.currentEvent, r.sys.recordDerivStart(r.name, ev, start))
 	effect := r.deriv.OnEvent(ev.Event)
 	elapsed := time.Since(start)
-	r.sys.recordDerivEnd(r.name, ev, r.currentEvent, start, elapsed, effect)
-	r.currentEvent = prev
+	r.sys.recordDerivEnd(r.name, ev, atomic.LoadUint64(&r.currentEvent), start, elapsed, effect)
+	atomic.StoreUint64(&r.currentEvent, prev)
 }
 
 // Sys is the canonical implementation of System.
@@ -113,6 +113,7 @@ func (s *Sys) Register(name string, deriver Deriver, opts *RegisterOpts) Emitter
 	s.regsLock.Lock()
 	defer s.regsLock.Unlock()
 
+	s.log.Info("register", "name", name)
 	if _, ok := s.regs[name]; ok {
 		panic(fmt.Errorf("a deriver/emitter with name %q already exists", name))
 	}
@@ -130,7 +131,7 @@ func (s *Sys) Register(name string, deriver Deriver, opts *RegisterOpts) Emitter
 	if opts.Emitter.Limiting {
 		limitedCallback := opts.Emitter.OnLimited
 		em = NewLimiter(ctx, r, opts.Emitter.Rate, opts.Emitter.Burst, func() {
-			r.sys.recordRateLimited(name, r.currentEvent)
+			r.sys.recordRateLimited(name, atomic.LoadUint64(&r.currentEvent))
 			if limitedCallback != nil {
 				limitedCallback()
 			}

@@ -110,6 +110,7 @@ type Sequencer struct {
 	// nextAction is when the next sequencing action should be performed
 	nextAction   time.Time
 	nextActionOK bool
+	nextActionCh chan struct{}
 
 	latest     BuildingState
 	latestHead eth.L2BlockRef
@@ -140,6 +141,7 @@ func NewSequencer(driverCtx context.Context, log log.Logger, rollupCfg *rollup.C
 		metrics:          metrics,
 		timeNow:          time.Now,
 		toBlockRef:       derive.PayloadToBlockRef,
+		nextActionCh:     make(chan struct{}, 1),
 	}
 }
 
@@ -150,6 +152,7 @@ func (d *Sequencer) AttachEmitter(em event.Emitter) {
 func (d *Sequencer) OnEvent(ev event.Event) bool {
 	d.l.Lock()
 	defer d.l.Unlock()
+	d.log.Info("Sequencer started", "eventType", ev.String())
 
 	preTime := d.nextAction
 	preOk := d.nextActionOK
@@ -188,6 +191,7 @@ func (d *Sequencer) OnEvent(ev event.Event) bool {
 	default:
 		return false
 	}
+	d.log.Info("Sequencer ended", "eventType", ev.String())
 	return true
 }
 
@@ -229,6 +233,16 @@ func (d *Sequencer) onBuildStarted(x engine.BuildStartedEvent) {
 		// finish with margin of sealing duration before payloadTime
 		d.nextAction = payloadTime.Add(-sealingDuration)
 	}
+	select {
+	case d.nextActionCh <- struct{}{}:
+	default:
+	}
+	d.log.Info("debug1111", "length", len(d.nextActionCh))
+	d.log.Info("nextAction", "remainingTime", remainingTime, "d.nextAction", d.nextAction)
+}
+
+func (d *Sequencer) NextActionStep() <-chan struct{} {
+	return d.nextActionCh
 }
 
 func (d *Sequencer) handleInvalid() {
@@ -239,6 +253,10 @@ func (d *Sequencer) handleInvalid() {
 	blockTime := time.Duration(d.rollupCfg.BlockTime) * time.Second
 	d.nextAction = d.timeNow().Add(blockTime)
 	d.nextActionOK = d.active.Load()
+	select {
+	case d.nextActionCh <- struct{}{}:
+	default:
+	}
 }
 
 func (d *Sequencer) onInvalidPayloadAttributes(x engine.InvalidPayloadAttributesEvent) {
@@ -330,9 +348,11 @@ func (d *Sequencer) onPayloadSuccess(x engine.PayloadSuccessEvent) {
 }
 
 func (d *Sequencer) onSequencerAction(x SequencerActionEvent) {
+	d.log.Info("onSequencerAction started")
 	d.log.Debug("Sequencer action")
 	payload := d.asyncGossip.Get()
 	if payload != nil {
+		d.log.Debug("Gossip logic", "hash", payload.ExecutionPayload.BlockHash)
 		if d.latest.Info.ID == (eth.PayloadID{}) {
 			d.log.Warn("Found reusable payload from async gossiper, and no block was being built. Reusing payload.",
 				"hash", payload.ExecutionPayload.BlockHash,
@@ -361,6 +381,7 @@ func (d *Sequencer) onSequencerAction(x SequencerActionEvent) {
 			d.nextActionOK = false
 			// No known payload for block building job,
 			// we have to retrieve it first.
+			d.log.Info("emit BuildSealEvent")
 			d.emitter.Emit(engine.BuildSealEvent{
 				Info:         d.latest.Info,
 				BuildStarted: d.latest.Started,
@@ -369,9 +390,11 @@ func (d *Sequencer) onSequencerAction(x SequencerActionEvent) {
 			})
 		} else if d.latest == (BuildingState{}) {
 			// If we have not started building anything, start building.
+			d.log.Info("startBuildingBlock begin")
 			d.startBuildingBlock()
 		}
 	}
+	d.log.Info("onSequencerAction ended")
 }
 
 func (d *Sequencer) onEngineTemporaryError(x rollup.EngineTemporaryErrorEvent) {
@@ -386,6 +409,10 @@ func (d *Sequencer) onEngineTemporaryError(x rollup.EngineTemporaryErrorEvent) {
 		d.nextAction = d.timeNow().Add(time.Second)
 	}
 	d.nextActionOK = d.active.Load()
+	select {
+	case d.nextActionCh <- struct{}{}:
+	default:
+	}
 	// We don't explicitly cancel block building jobs upon temporary errors: we may still finish the block (if any).
 	// Any unfinished block building work eventually times out, and will be cleaned up that way.
 	// Note that this only applies to temporary errors upon starting a block-building job.
@@ -416,6 +443,10 @@ func (d *Sequencer) onEngineResetConfirmedEvent(x engine.EngineResetConfirmedEve
 	// assuming the execution-engine just churned through some work for the reset.
 	// This will also prevent any potential reset-loop from running too hot.
 	d.nextAction = d.timeNow().Add(time.Second * time.Duration(d.rollupCfg.BlockTime))
+	select {
+	case d.nextActionCh <- struct{}{}:
+	default:
+	}
 	d.log.Info("Engine reset confirmed, sequencer may continue", "next", d.nextActionOK)
 }
 
@@ -441,11 +472,13 @@ func (d *Sequencer) onForkchoiceUpdate(x engine.ForkchoiceUpdateEvent) {
 		d.latest = BuildingState{}
 	}
 	if x.UnsafeL2Head.Number > d.latestHead.Number {
+		d.log.Info("modify nextAction and ok", "unsafeNumber", x.UnsafeL2Head.Number, "latestNumber", d.latestHead.Number)
 		d.nextActionOK = true
 		now := d.timeNow()
 		blockTime := time.Duration(d.rollupCfg.BlockTime) * time.Second
 		payloadTime := time.Unix(int64(x.UnsafeL2Head.Time+d.rollupCfg.BlockTime), 0)
 		remainingTime := payloadTime.Sub(now)
+		d.log.Info("nextAction", "remainingTime", remainingTime, "now", now.String())
 		if remainingTime > blockTime {
 			// if we have too much time, then wait before starting the build
 			d.nextAction = payloadTime.Add(-blockTime)
@@ -453,22 +486,29 @@ func (d *Sequencer) onForkchoiceUpdate(x engine.ForkchoiceUpdateEvent) {
 			// otherwise start instantly
 			d.nextAction = now
 		}
+		select {
+		case d.nextActionCh <- struct{}{}:
+		default:
+		}
 	}
 	d.latestHead = x.UnsafeL2Head
 }
 
 // StartBuildingBlock initiates a block building job on top of the given L2 head, safe and finalized blocks, and using the provided l1Origin.
 func (d *Sequencer) startBuildingBlock() {
+	d.log.Info("execute startBuildingBlock")
 	ctx := d.ctx
 	l2Head := d.latestHead
 
 	// If we do not have data to know what to build on, then request a forkchoice update
+	d.log.Info("fcu", "l2Head", l2Head.Number)
 	if l2Head == (eth.L2BlockRef{}) {
 		d.emitter.Emit(engine.ForkchoiceRequestEvent{})
 		return
 	}
 	// If we have already started trying to build on top of this block, we can avoid starting over again.
 	if d.latest.Onto == l2Head {
+		d.log.Info("already start build block", "d.latest.Onto", d.latest.Onto.Number, "l2Head", l2Head.Number)
 		return
 	}
 
@@ -492,7 +532,9 @@ func (d *Sequencer) startBuildingBlock() {
 	fetchCtx, cancel := context.WithTimeout(ctx, time.Second*20)
 	defer cancel()
 
+	d.log.Info("PreparePayloadAttributes started")
 	attrs, err := d.attrBuilder.PreparePayloadAttributes(fetchCtx, l2Head, l1Origin.ID())
+	d.log.Info("PreparePayloadAttributes ended")
 	if err != nil {
 		if errors.Is(err, derive.ErrTemporary) {
 			d.emitter.Emit(rollup.EngineTemporaryErrorEvent{Err: err})
@@ -551,6 +593,7 @@ func (d *Sequencer) startBuildingBlock() {
 	// If we get a forkchoice update that conflicts, we will have to abort building.
 	d.latest = BuildingState{Onto: l2Head}
 
+	d.log.Info("emit BildStartEvent")
 	d.emitter.Emit(engine.BuildStartEvent{
 		Attributes: withParent,
 	})
@@ -621,6 +664,10 @@ func (d *Sequencer) forceStart() error {
 	}
 	d.nextActionOK = true
 	d.nextAction = d.timeNow()
+	select {
+	case d.nextActionCh <- struct{}{}:
+	default:
+	}
 	d.active.Store(true)
 	d.log.Info("Sequencer has been started", "next action", d.nextAction)
 	return nil
