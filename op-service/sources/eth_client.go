@@ -351,6 +351,27 @@ func (s *EthClient) GetProof(ctx context.Context, address common.Address, storag
 	return getProofResponse, nil
 }
 
+// GetWithdrawProof returns withdraw storage proofs.
+func (s *EthClient) GetWithdrawProof(ctx context.Context, address common.Address, storage []common.Hash, blockTag string) (*eth.AccountResult, error) {
+	var getProofResponse *eth.AccountResult
+	err := s.client.CallContext(ctx, &getProofResponse, "eth_getWithdrawProof", address, storage, blockTag)
+	if err != nil {
+		return nil, err
+	}
+	if getProofResponse == nil {
+		return nil, ethereum.NotFound
+	}
+	if len(getProofResponse.StorageProof) != len(storage) {
+		return nil, fmt.Errorf("missing storage proof data, got %d proof entries but requested %d storage keys", len(getProofResponse.StorageProof), len(storage))
+	}
+	for i, key := range storage {
+		if key != getProofResponse.StorageProof[i].Key {
+			return nil, fmt.Errorf("unexpected storage proof key difference for entry %d: got %s but requested %s", i, getProofResponse.StorageProof[i].Key, key)
+		}
+	}
+	return getProofResponse, nil
+}
+
 // GetStorageAt returns the storage value at the given address and storage slot, **without verifying the correctness of the result**.
 // This should only ever be used as alternative to GetProof when the user opts in.
 // E.g. Erigon L1 node users may have to use this, since Erigon does not support eth_getProof, see https://github.com/ledgerwatch/erigon/issues/1349
