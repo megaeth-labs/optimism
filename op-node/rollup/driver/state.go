@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"runtime/trace"
 	gosync "sync"
 	"time"
 
@@ -224,9 +226,13 @@ func (s *Driver) eventLoop() {
 			altSyncTicker.Reset(syncCheckInterval)
 		}
 
+		f, _ := os.Create("/home/clay/trace.out")
+		_ = trace.Start(f)
 		select {
 		case <-sequencerCh:
+			s.log.Info("debug00")
 			s.Emitter.Emit(sequencing.SequencerActionEvent{})
+			s.log.Info("debug09")
 		case <-altSyncTicker.C:
 			// Check if there is a gap in the current unsafe payload queue.
 			ctx, cancel := context.WithTimeout(s.driverCtx, time.Second*2)
@@ -257,14 +263,20 @@ func (s *Driver) eventLoop() {
 				}
 			}
 		case newL1Head := <-s.l1HeadSig:
+			s.log.Info("debug10")
 			s.Emitter.Emit(status.L1UnsafeEvent{L1Unsafe: newL1Head})
 			reqStep() // a new L1 head may mean we have the data to not get an EOF again.
+			s.log.Info("debug19")
 		case newL1Safe := <-s.l1SafeSig:
+			s.log.Info("debug20")
 			s.Emitter.Emit(status.L1SafeEvent{L1Safe: newL1Safe})
+			s.log.Info("debug29")
 			// no step, justified L1 information does not do anything for L2 derivation or status
 		case newL1Finalized := <-s.l1FinalizedSig:
+			s.log.Info("debug30")
 			s.emitter.Emit(finality.FinalizeL1Event{FinalizedL1: newL1Finalized})
 			reqStep() // we may be able to mark more L2 data as finalized now
+			s.log.Info("debug39")
 		case <-s.sched.NextDelayedStep():
 			s.emitter.Emit(StepAttemptEvent{})
 		case <-s.sched.NextStep():

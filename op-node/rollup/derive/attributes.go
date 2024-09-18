@@ -3,6 +3,7 @@ package derive
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -48,7 +49,9 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 	var depositTxs []hexutil.Bytes
 	var seqNumber uint64
 
+	fmt.Println("debug02, time0:", time.Now().Format("2006-01-02 15:04:05.00000"))
 	sysConfig, err := ba.l2.SystemConfigByL2Hash(ctx, l2Parent.Hash)
+	fmt.Println("debug02, time1:", time.Now().Format("2006-01-02 15:04:05.00000"))
 	if err != nil {
 		return nil, NewTemporaryError(fmt.Errorf("failed to retrieve L2 parent block: %w", err))
 	}
@@ -57,7 +60,9 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 	// case we need to fetch all transaction receipts from the L1 origin block so we can scan for
 	// user deposits.
 	if l2Parent.L1Origin.Number != epoch.Number {
+		fmt.Println("debug02, time3:", time.Now().Format("2006-01-02 15:04:05.00000"))
 		info, receipts, err := ba.l1.FetchReceipts(ctx, epoch.Hash)
+		fmt.Println("debug02, time4:", time.Now().Format("2006-01-02 15:04:05.00000"))
 		if err != nil {
 			return nil, NewTemporaryError(fmt.Errorf("failed to fetch L1 block info and receipts: %w", err))
 		}
@@ -67,15 +72,19 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 					epoch, info.ParentHash(), l2Parent.L1Origin))
 		}
 
+		fmt.Println("debug02, time5:", time.Now().Format("2006-01-02 15:04:05.00000"))
 		deposits, err := DeriveDeposits(receipts, ba.rollupCfg.DepositContractAddress)
+		fmt.Println("debug02, time6:", time.Now().Format("2006-01-02 15:04:05.00000"))
 		if err != nil {
 			// deposits may never be ignored. Failing to process them is a critical error.
 			return nil, NewCriticalError(fmt.Errorf("failed to derive some deposits: %w", err))
 		}
 		// apply sysCfg changes
+		fmt.Println("debug02, time7:", time.Now().Format("2006-01-02 15:04:05.00000"))
 		if err := UpdateSystemConfigWithL1Receipts(&sysConfig, receipts, ba.rollupCfg, info.Time()); err != nil {
 			return nil, NewCriticalError(fmt.Errorf("failed to apply derived L1 sysCfg updates: %w", err))
 		}
+		fmt.Println("debug02, time8:", time.Now().Format("2006-01-02 15:04:05.00000"))
 
 		l1Info = info
 		depositTxs = deposits
@@ -84,7 +93,9 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 		if l2Parent.L1Origin.Hash != epoch.Hash {
 			return nil, NewResetError(fmt.Errorf("cannot create new block with L1 origin %s in conflict with L1 origin %s", epoch, l2Parent.L1Origin))
 		}
+		fmt.Println("debug02, time9:", time.Now().Format("2006-01-02 15:04:05.00000"))
 		info, err := ba.l1.InfoByHash(ctx, epoch.Hash)
+		fmt.Println("debug02, time10:", time.Now().Format("2006-01-02 15:04:05.00000"))
 		if err != nil {
 			return nil, NewTemporaryError(fmt.Errorf("failed to fetch L1 block info: %w", err))
 		}
@@ -93,6 +104,7 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 		seqNumber = l2Parent.SequenceNumber + 1
 	}
 
+	fmt.Println("debug02, time11:", time.Now().Format("2006-01-02 15:04:05.00000"))
 	// Sanity check the L1 origin was correctly selected to maintain the time invariant between L1 and L2
 	nextL2Time := l2Parent.Time + ba.rollupCfg.BlockTime
 	if nextL2Time < l1Info.Time() {
@@ -116,7 +128,9 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 		upgradeTxs = append(upgradeTxs, fjord...)
 	}
 
+	fmt.Println("debug02, time12:", time.Now().Format("2006-01-02 15:04:05.00000"))
 	l1InfoTx, err := L1InfoDepositBytes(ba.rollupCfg, sysConfig, seqNumber, l1Info, nextL2Time)
+	fmt.Println("debug02, time13:", time.Now().Format("2006-01-02 15:04:05.00000"))
 	if err != nil {
 		return nil, NewCriticalError(fmt.Errorf("failed to create l1InfoTx: %w", err))
 	}
@@ -139,12 +153,13 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 		}
 	}
 
+	fmt.Println("debug02, time14:", time.Now().Format("2006-01-02 15:04:05.00000"))
 	return &eth.PayloadAttributes{
 		Timestamp:             hexutil.Uint64(nextL2Time),
 		PrevRandao:            eth.Bytes32(l1Info.MixDigest()),
 		SuggestedFeeRecipient: predeploys.SequencerFeeVaultAddr,
 		Transactions:          txs,
-		NoTxPool:              true,
+		NoTxPool:              false,
 		GasLimit:              (*eth.Uint64Quantity)(&sysConfig.GasLimit),
 		Withdrawals:           withdrawals,
 		ParentBeaconBlockRoot: parentBeaconRoot,

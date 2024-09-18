@@ -40,7 +40,9 @@ func (eq *EngDeriver) onBuildStart(ev BuildStartEvent) {
 		FinalizedBlockHash: fcEvent.FinalizedL2Head.Hash,
 	}
 	buildStartTime := time.Now()
+	eq.log.Info("debug04", "parent=", ev.Attributes.Parent, "NoTxPool=", ev.Attributes.Attributes.NoTxPool)
 	id, errTyp, err := startPayload(ctx, eq.ec.engine, fc, ev.Attributes.Attributes)
+	eq.log.Info("debug04", "id=", id.String())
 	if err != nil {
 		switch errTyp {
 		case BlockInsertTemporaryErr:

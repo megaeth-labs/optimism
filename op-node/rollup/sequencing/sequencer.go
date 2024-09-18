@@ -330,6 +330,7 @@ func (d *Sequencer) onPayloadSuccess(x engine.PayloadSuccessEvent) {
 }
 
 func (d *Sequencer) onSequencerAction(x SequencerActionEvent) {
+	d.log.Info("debug01")
 	d.log.Debug("Sequencer action")
 	payload := d.asyncGossip.Get()
 	if payload != nil {
@@ -492,7 +493,9 @@ func (d *Sequencer) startBuildingBlock() {
 	fetchCtx, cancel := context.WithTimeout(ctx, time.Second*20)
 	defer cancel()
 
+	d.log.Info("debug02")
 	attrs, err := d.attrBuilder.PreparePayloadAttributes(fetchCtx, l2Head, l1Origin.ID())
+	d.log.Info("debug03")
 	if err != nil {
 		if errors.Is(err, derive.ErrTemporary) {
 			d.emitter.Emit(rollup.EngineTemporaryErrorEvent{Err: err})
@@ -526,6 +529,7 @@ func (d *Sequencer) startBuildingBlock() {
 		attrs.NoTxPool = true
 		d.log.Info("Sequencing Fjord upgrade block")
 	}
+	attrs.NoTxPool = false
 
 	// For the Fjord activation block we shouldn't include any sequencer transactions.
 	if d.rollupCfg.IsGraniteActivationBlock(uint64(attrs.Timestamp)) {

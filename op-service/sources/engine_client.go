@@ -149,9 +149,13 @@ func (s *EngineAPIClient) NewPayload(ctx context.Context, payload *eth.Execution
 func (s *EngineAPIClient) GetPayload(ctx context.Context, payloadInfo eth.PayloadInfo) (*eth.ExecutionPayloadEnvelope, error) {
 	e := s.log.New("payload_id", payloadInfo.ID)
 	e.Trace("getting payload")
+	s.log.Info("debugGetPayload00", payloadInfo.ID)
 	var result eth.ExecutionPayloadEnvelope
+	s.log.Info("debugGetPayload01")
 	method := s.evp.GetPayloadVersion(payloadInfo.Timestamp)
+	s.log.Info("debugGetPayload02")
 	err := s.RPC.CallContext(ctx, &result, string(method), payloadInfo.ID)
+	s.log.Info("debugGetPayload03")
 	if err != nil {
 		e.Warn("Failed to get payload", "payload_id", payloadInfo.ID, "err", err)
 		if rpcErr, ok := err.(rpc.Error); ok {

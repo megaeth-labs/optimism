@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 
 	"github.com/urfave/cli/v2"
@@ -23,6 +24,7 @@ import (
 	oplog "github.com/ethereum-optimism/optimism/op-service/log"
 	"github.com/ethereum-optimism/optimism/op-service/metrics/doc"
 	"github.com/ethereum-optimism/optimism/op-service/opio"
+	_ "net/http/pprof"
 )
 
 var (
@@ -72,6 +74,9 @@ func main() {
 }
 
 func RollupNodeMain(ctx *cli.Context, closeApp context.CancelCauseFunc) (cliapp.Lifecycle, error) {
+	go func() {
+		http.ListenAndServe("0.0.0.0:6060", nil)
+	}()
 	logCfg := oplog.ReadCLIConfig(ctx)
 	log := oplog.NewLogger(oplog.AppOut(ctx), logCfg)
 	oplog.SetGlobalLogHandler(log.Handler())

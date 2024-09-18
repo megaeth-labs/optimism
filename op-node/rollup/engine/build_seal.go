@@ -52,11 +52,14 @@ func (ev BuildSealEvent) String() string {
 }
 
 func (eq *EngDeriver) onBuildSeal(ev BuildSealEvent) {
+	eq.log.Info("debug05", "get payload:", ev.Info.ID.String())
 	ctx, cancel := context.WithTimeout(eq.ctx, buildSealTimeout)
 	defer cancel()
 
 	sealingStart := time.Now()
+	eq.log.Info("debug05, getpayload begin")
 	envelope, err := eq.ec.engine.GetPayload(ctx, ev.Info)
+	eq.log.Info("debug05, getpayload end")
 	if err != nil {
 		if x, ok := err.(eth.InputError); ok && x.Code == eth.UnknownPayload { //nolint:all
 			eq.log.Warn("Cannot seal block, payload ID is unknown",
@@ -77,6 +80,7 @@ func (eq *EngDeriver) onBuildSeal(ev BuildSealEvent) {
 		return
 	}
 
+	eq.log.Info("debug05, begin check payload")
 	if err := sanityCheckPayload(envelope.ExecutionPayload); err != nil {
 		eq.emitter.Emit(PayloadSealInvalidEvent{
 			Info: ev.Info,
@@ -88,6 +92,7 @@ func (eq *EngDeriver) onBuildSeal(ev BuildSealEvent) {
 		return
 	}
 
+	eq.log.Info("debug05, payload to block ref")
 	ref, err := derive.PayloadToBlockRef(eq.cfg, envelope.ExecutionPayload)
 	if err != nil {
 		eq.emitter.Emit(PayloadSealInvalidEvent{
@@ -106,9 +111,10 @@ func (eq *EngDeriver) onBuildSeal(ev BuildSealEvent) {
 	eq.metrics.RecordSequencerBuildingDiffTime(buildTime - time.Duration(eq.cfg.BlockTime)*time.Second)
 
 	txnCount := len(envelope.ExecutionPayload.Transactions)
+	eq.log.Info("debug05, record metrics")
 	eq.metrics.CountSequencedTxs(txnCount)
 
-	eq.log.Debug("Processed new L2 block", "l2_unsafe", ref, "l1_origin", ref.L1Origin,
+	eq.log.Info("Processed new L2 block", "l2_unsafe", ref, "l1_origin", ref.L1Origin,
 		"txs", txnCount, "time", ref.Time, "seal_time", sealTime, "build_time", buildTime)
 
 	eq.emitter.Emit(BuildSealedEvent{

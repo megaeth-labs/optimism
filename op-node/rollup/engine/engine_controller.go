@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/trace"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -241,6 +242,8 @@ func (e *EngineController) TryUpdateEngine(ctx context.Context) error {
 	}
 	logFn := e.logSyncProgressMaybe()
 	defer logFn()
+	e.log.Info("debug08", "finalize block:", fc.HeadBlockHash)
+	trace.Stop()
 	fcRes, err := e.engine.ForkchoiceUpdate(ctx, &fc, nil)
 	if err != nil {
 		var inputErr eth.InputError
