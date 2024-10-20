@@ -168,6 +168,7 @@ func (s *EngineAPIClient) GetPayload(ctx context.Context, payloadInfo eth.Payloa
 		}
 		return nil, err
 	}
+	e.Trace("Received payload")
 	return &result, nil
 }
 

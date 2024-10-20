@@ -75,7 +75,6 @@ type Metricer interface {
 	RecordDial(allow bool)
 	RecordAccept(allow bool)
 	ReportProtocolVersions(local, engine, recommended, required params.ProtocolVersion)
-	RecordL2BlockDetail(blockRate, averageTPS, blockInterval, totalTxs, blockTxs float64)
 }
 
 // Metrics tracks all the metrics for the op-node.
@@ -161,11 +160,6 @@ type Metrics struct {
 	ProtocolVersionDelta *prometheus.GaugeVec
 	// ProtocolVersions is pseudo-metric to report the exact protocol version info
 	ProtocolVersions *prometheus.GaugeVec
-	BlockRate        prometheus.Gauge
-	BlockInterval    prometheus.Gauge
-	AverageTPS       prometheus.Gauge
-	TotalTxs         prometheus.Gauge
-	BlockTxs         prometheus.Gauge
 
 	registry *prometheus.Registry
 	factory  metrics.Factory
@@ -430,31 +424,6 @@ func NewMetrics(procName string) *Metrics {
 			"recommended",
 			"required",
 		}),
-		BlockRate: factory.NewGauge(prometheus.GaugeOpts{
-			Namespace: ns,
-			Name:      "block_rate",
-			Help:      "The number of blocks produced per second",
-		}),
-		BlockInterval: factory.NewGauge(prometheus.GaugeOpts{
-			Namespace: ns,
-			Name:      "block_interval",
-			Help:      "block interval",
-		}),
-		AverageTPS: factory.NewGauge(prometheus.GaugeOpts{
-			Namespace: ns,
-			Name:      "average_tps",
-			Help:      "average tps",
-		}),
-		TotalTxs: factory.NewGauge(prometheus.GaugeOpts{
-			Namespace: ns,
-			Name:      "total_txs",
-			Help:      "total txs",
-		}),
-		BlockTxs: factory.NewGauge(prometheus.GaugeOpts{
-			Namespace: ns,
-			Name:      "block_txs",
-			Help:      "block txs",
-		}),
 
 		AltDAMetrics: altda.MakeMetrics(ns, factory),
 
@@ -702,14 +671,6 @@ func (m *Metrics) ReportProtocolVersions(local, engine, recommended, required pa
 	m.ProtocolVersions.WithLabelValues(local.String(), engine.String(), recommended.String(), required.String()).Set(1)
 }
 
-func (m *Metrics) RecordL2BlockDetail(blockRate, averageTPS, blockInterval, totalTxs, blockTxs float64) {
-	m.BlockRate.Set(blockRate)
-	m.AverageTPS.Set(averageTPS)
-	m.BlockInterval.Set(blockInterval)
-	m.TotalTxs.Set(totalTxs)
-	m.BlockTxs.Set(blockTxs)
-}
-
 type noopMetricer struct {
 	metrics.NoopRPCMetrics
 }
@@ -840,7 +801,4 @@ func (n *noopMetricer) RecordDial(allow bool) {
 func (n *noopMetricer) RecordAccept(allow bool) {
 }
 func (n *noopMetricer) ReportProtocolVersions(local, engine, recommended, required params.ProtocolVersion) {
-}
-
-func (n *noopMetricer) RecordL2BlockDetail(blockRate, averageTPS, blockInterval, totalTxs, blockTxs float64) {
 }
