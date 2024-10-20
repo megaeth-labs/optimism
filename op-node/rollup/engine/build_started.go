@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/ethereum-optimism/optimism/op-service/eth"
@@ -26,9 +25,7 @@ func (ev BuildStartedEvent) String() string {
 
 func (eq *EngDeriver) onBuildStarted(ev BuildStartedEvent) {
 	// If a (pending) safe block, immediately seal the block
-	fmt.Println(time.Now().Format("2006-01-02 15:04:05.00000"), "onBuildStarted started: payloadId:", ev.Info.ID.String())
 	if ev.DerivedFrom != (eth.L1BlockRef{}) {
-		fmt.Println(time.Now().Format("2006-01-02 15:04:05.00000"), "emit BuildSealEvent: payloadId:", ev.Info.ID.String())
 		eq.emitter.Emit(BuildSealEvent{
 			Info:         ev.Info,
 			BuildStarted: ev.BuildStarted,
@@ -36,5 +33,4 @@ func (eq *EngDeriver) onBuildStarted(ev BuildStartedEvent) {
 			DerivedFrom:  ev.DerivedFrom,
 		})
 	}
-	fmt.Println(time.Now().Format("2006-01-02 15:04:05.00000"), "onBuildStarted ended: payloadId:", ev.Info.ID.String())
 }

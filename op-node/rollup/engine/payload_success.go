@@ -24,9 +24,7 @@ func (eq *EngDeriver) onPayloadSuccess(ev PayloadSuccessEvent) {
 	if eq.ec.unsafeHead.Number >= ev.Ref.Number {
 		eq.ec.SetBackupUnsafeL2Head(eq.ec.unsafeHead, false)
 	}
-	eq.log.Info("SetUnsafeHead started")
 	eq.ec.SetUnsafeHead(ev.Ref)
-	eq.log.Info("SetUnsafeHead ended")
 
 	// If derived from L1, then it can be considered (pending) safe
 	if ev.DerivedFrom != (eth.L1BlockRef{}) {

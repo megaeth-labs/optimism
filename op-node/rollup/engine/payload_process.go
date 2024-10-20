@@ -23,7 +23,6 @@ func (ev PayloadProcessEvent) String() string {
 }
 
 func (eq *EngDeriver) onPayloadProcess(ev PayloadProcessEvent) {
-	eq.log.Info("onPayloadProcess started")
 	ctx, cancel := context.WithTimeout(eq.ctx, payloadProcessTimeout)
 	defer cancel()
 
@@ -34,7 +33,6 @@ func (eq *EngDeriver) onPayloadProcess(ev PayloadProcessEvent) {
 			Err: fmt.Errorf("failed to insert execution payload: %w", err)})
 		return
 	}
-	eq.log.Info("onPayloadProcess ended")
 	switch status.Status {
 	case eth.ExecutionInvalid, eth.ExecutionInvalidBlockHash:
 		eq.emitter.Emit(PayloadInvalidEvent{

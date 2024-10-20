@@ -113,7 +113,6 @@ func (s *Sys) Register(name string, deriver Deriver, opts *RegisterOpts) Emitter
 	s.regsLock.Lock()
 	defer s.regsLock.Unlock()
 
-	s.log.Info("register", "name", name)
 	if _, ok := s.regs[name]; ok {
 		panic(fmt.Errorf("a deriver/emitter with name %q already exists", name))
 	}

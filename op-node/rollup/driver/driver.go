@@ -176,15 +176,9 @@ func NewDriver(
 	{
 		executor = event.NewParallelExec()
 		drain = func() error { return nil } // no-op
-		//s := event.NewGlobalSynchronous(driverCtx)
-		//executor = s
-		//drain = s.Drain
 	}
 	sys := event.NewSystem(log, executor)
 	sys.AddTracer(event.NewMetricsTracer(metrics))
-	//logger := golog.New()
-	//logTracer := event.NewLogTracer(logger, golog.LevelDebug)
-	//sys.AddTracer(logTracer)
 
 	opts := event.DefaultRegisterOpts()
 

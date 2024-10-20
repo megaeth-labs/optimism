@@ -241,7 +241,6 @@ func (e *EngineController) TryUpdateEngine(ctx context.Context) error {
 	}
 	logFn := e.logSyncProgressMaybe()
 	defer logFn()
-	e.log.Info("ForkchoiceUpdate started", "finalize block:", fc.HeadBlockHash)
 	fcRes, err := e.engine.ForkchoiceUpdate(ctx, &fc, nil)
 	if err != nil {
 		var inputErr eth.InputError
@@ -256,7 +255,6 @@ func (e *EngineController) TryUpdateEngine(ctx context.Context) error {
 			return derive.NewTemporaryError(fmt.Errorf("failed to sync forkchoice with engine: %w", err))
 		}
 	}
-	e.log.Info("ForkchoiceUpdate ended", "block", e.unsafeHead.Number)
 	if fcRes.PayloadStatus.Status == eth.ExecutionValid {
 		e.emitter.Emit(ForkchoiceUpdateEvent{
 			UnsafeL2Head:    e.unsafeHead,
