@@ -24,7 +24,7 @@ func (ds DisabledSequencer) NextAction() (t time.Time, ok bool) {
 	return time.Time{}, false
 }
 
-func (ds DisabledSequencer) NextActionStep() <-chan struct{} { return nil }
+func (ds DisabledSequencer) CheckNextAction() <-chan struct{} { return nil }
 
 func (ds DisabledSequencer) Active() bool {
 	return false

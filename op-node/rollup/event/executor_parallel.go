@@ -2,11 +2,9 @@ package event
 
 import (
 	"context"
-	"fmt"
 	"slices"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 type ParallelExec struct {
@@ -23,7 +21,6 @@ func NewParallelExec() *ParallelExec {
 func (p *ParallelExec) Add(d Executable, opts *ExecutorOpts) (leaveExecutor func()) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	fmt.Println(time.Now().Format("2006-01-02 15:04:05.00000"), ", add handler parallel, handler name:,", opts.Capacity)
 	w := newWorker(p, d, opts)
 	p.workers = append(p.workers, w)
 	return w.leave

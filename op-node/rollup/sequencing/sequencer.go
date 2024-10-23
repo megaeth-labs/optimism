@@ -237,7 +237,7 @@ func (d *Sequencer) onBuildStarted(x engine.BuildStartedEvent) {
 	}
 }
 
-func (d *Sequencer) NextActionStep() <-chan struct{} {
+func (d *Sequencer) CheckNextAction() <-chan struct{} {
 	return d.nextActionCh
 }
 

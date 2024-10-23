@@ -229,7 +229,7 @@ func (s *Driver) eventLoop() {
 		select {
 		case <-sequencerCh:
 			s.Emitter.Emit(sequencing.SequencerActionEvent{})
-		case <-s.sequencer.NextActionStep():
+		case <-s.sequencer.CheckNextAction():
 		case <-altSyncTicker.C:
 			// Check if there is a gap in the current unsafe payload queue.
 			ctx, cancel := context.WithTimeout(s.driverCtx, time.Second*2)
